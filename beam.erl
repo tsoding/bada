@@ -31,7 +31,7 @@ parse_chunks(Chunks) ->
 %% >>
 parse_chunks([{"AtU8", _Size, <<_NumberOfAtoms:32/big, Atoms/binary>>} | Rest], Acc) ->
     parse_chunks(Rest, [{atoms, parse_atoms(Atoms)} | Acc]);
-%% ImportChunk = <<
+%% CodeChunk = <<
 %%   ChunkName:4/unit:8 = "Code",
 %%   ChunkSize:32/big,
 %%   SubSize:32/big,
@@ -43,12 +43,21 @@ parse_chunks([{"AtU8", _Size, <<_NumberOfAtoms:32/big, Atoms/binary>>} | Rest], 
 %%   Padding4:0..3/unit:8
 %% >>
 parse_chunks([{"Code", Size, <<SubSize:32/big,
-                               _Info:SubSize/binary,
+                               InstructionSet:32/big,
+                               OpcodeMax:32/big,
+                               LabelCount:32/big,
+                               FunctionCount:32/big,
+                               %% Info:SubSize/binary,
                                Code/binary>>
               } | Rest], Acc) ->
     OpcodeSize = Size - (SubSize + 8),
     <<OpCodes:OpcodeSize/binary, _Align/binary>> = Code,
-    parse_chunks(Rest, [{code, OpCodes} | Acc]);
+    Info = [{sub_size, SubSize},
+            {instruction_set, InstructionSet},
+            {opcode_max, OpcodeMax},
+            {label_count, LabelCount},
+            {function_count, FunctionCount}],
+    parse_chunks(Rest, [{code, Info, OpCodes} | Acc]);
 %% ExportChunk = <<
 %%   ChunkName:4/unit:8 = "ExpT",
 %%   ChunkSize:32/big,
