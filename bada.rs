@@ -64,7 +64,7 @@ fn pad_chunk(chunk: &mut Vec<u8>) {
 //   Code:(ChunkSize-SubSize)/binary,  % all remaining data
 //   Padding4:0..3/unit:8
 // >>
-fn encode_code_chunk(program: &HashMap<&str, usize>, atoms: &mut Atoms, labels: &mut HashMap<u32, u32>) -> Vec<u8> {
+fn encode_code_chunk<'a>(program: &HashMap<&'a str, usize>, atoms: &mut Atoms<'a>, labels: &mut HashMap<u32, u32>) -> Vec<u8> {
     let mut label_count: u32 = 0;
     let mut function_count: u32 = 0;
 
@@ -211,21 +211,21 @@ fn encode_string_chunk() -> Vec<u8> {
 }
 
 #[derive(Default)]
-struct Atoms {
-    names: Vec<String>,
+struct Atoms<'a> {
+    names: Vec<&'a str>,
 }
 
-impl Atoms {
-    fn get_id(&mut self, needle: &str) -> usize {
+impl<'a> Atoms<'a> {
+    fn get_id(&mut self, needle: &'a str) -> usize {
         let result = self.names
             .iter()
             .enumerate()
-            .find(|(_, name)| name.as_str() == needle)
+            .find(|(_, &name)| name == needle)
             .map(|(index, _)| index + 1);
         if let Some(id) = result {
             id
         } else {
-            self.names.push(needle.to_string());
+            self.names.push(needle);
             self.names.len()
         }
     }
