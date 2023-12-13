@@ -45,12 +45,11 @@ enum OpCode {
     Move = 64,
 }
 
-// aaaa|aaaa|aaa0|
-fn pad_chunk(chunk: &mut Vec<u8>) {
-    let rem = chunk.len()%4;
-    if rem != 0 {
-        chunk.extend(&[0].repeat(4-rem))
-    }
+// aaaa|aaaa|a000|
+fn pad_chunk(word_size: usize, chunk: &mut Vec<u8>) {
+    let len = chunk.len();
+    let new_len = (len + word_size - 1)/word_size*word_size;
+    chunk.resize(new_len, 0)
 }
 
 fn encode_chunk(tag: [u8; 4], chunk: Vec<u8>) -> Vec<u8> {
@@ -58,7 +57,7 @@ fn encode_chunk(tag: [u8; 4], chunk: Vec<u8>) -> Vec<u8> {
     result.extend(tag);
     result.extend((chunk.len() as u32).to_be_bytes());
     result.extend(chunk);
-    pad_chunk(&mut result);
+    pad_chunk(4, &mut result);
     result
 }
 
