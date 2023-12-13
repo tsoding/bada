@@ -16,7 +16,7 @@ enum Tag {
     // Z = 7,
 }
 
-fn encode(tag: Tag, n: i32) -> Vec<u8> {
+fn encode_arg(tag: Tag, n: i32) -> Vec<u8> {
     if n < 0 {
         todo!("negative");
     } else if n < 16 {
@@ -74,22 +74,22 @@ fn code_chunk(program: &HashMap<&str, usize>, atoms: &mut Atoms, labels: &mut Ha
 
         label_count += 1;
         code.push(OpCode::Label as u8);
-        code.extend(encode(Tag::U, label_count as i32));
+        code.extend(encode_arg(Tag::U, label_count as i32));
 
         code.push(OpCode::FuncInfo as u8);
-        code.extend(encode(Tag::A, atoms.get_id("bada") as i32));
+        code.extend(encode_arg(Tag::A, atoms.get_id("bada") as i32));
         let name_id = atoms.get_id(name);
-        code.extend(encode(Tag::A, name_id as i32));
-        code.extend(encode(Tag::U, 0));
+        code.extend(encode_arg(Tag::A, name_id as i32));
+        code.extend(encode_arg(Tag::U, 0));
 
         label_count += 1;
         code.push(OpCode::Label as u8);
-        code.extend(encode(Tag::U, label_count as i32));
+        code.extend(encode_arg(Tag::U, label_count as i32));
         labels.insert(name_id as u32, label_count);
 
         code.push(OpCode::Move as u8);
-        code.extend(encode(Tag::I, (*result) as i32));
-        code.extend(encode(Tag::X, 0));
+        code.extend(encode_arg(Tag::I, (*result) as i32));
+        code.extend(encode_arg(Tag::X, 0));
 
         code.push(OpCode::Return as u8);
     }
