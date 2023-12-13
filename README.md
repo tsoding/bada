@@ -6,7 +6,7 @@ Simple Programming Language that compiles to BEAM bytecode.
 
 ```console
 $ rustc bada.rs
-$ cat > bada.boom >>END
+$ cat > bada.boom <<END
 hello = 69
 world = 420
 END
