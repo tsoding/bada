@@ -53,6 +53,15 @@ fn pad_chunk(chunk: &mut Vec<u8>) {
     }
 }
 
+fn encode_chunk(tag: [u8; 4], chunk: Vec<u8>) -> Vec<u8> {
+    let mut result = Vec::new();
+    result.extend(tag);
+    result.extend((chunk.len() as u32).to_be_bytes());
+    result.extend(chunk);
+    pad_chunk(&mut result);
+    result
+}
+
 // CodeChunk = <<
 //   ChunkName:4/unit:8 = "Code",
 //   ChunkSize:32/big,
@@ -109,17 +118,11 @@ fn encode_code_chunk<'a>(program: &HashMap<&'a str, usize>, atoms: &mut Atoms<'a
     chunk.extend(function_count.to_be_bytes());
     chunk.extend(code);
 
-    let mut result = Vec::new();
-    result.extend("Code".as_bytes());
-    result.extend((chunk.len() as u32).to_be_bytes());
-    pad_chunk(&mut chunk);
-    result.extend(chunk);
-
-    result
+    encode_chunk(*b"Code", chunk)
 }
 
 // AtomChunk = <<
-//   ChunkName:4/unit:8 = "Atom",
+//   ChunkName:4/unit:8 = "Atom" | "AtU8",
 //   ChunkSize:32/big,
 //   NumberOfAtoms:32/big,
 //   [<<AtomLength:8, AtomName:AtomLength/unit:8>> || repeat NumberOfAtoms],
@@ -133,13 +136,7 @@ fn encode_atom_chunk(atoms: &Atoms) -> Vec<u8> {
         chunk.extend(atom.as_bytes());
     }
 
-    let mut result = Vec::new();
-    result.extend("AtU8".as_bytes());
-    result.extend((chunk.len() as u32).to_be_bytes());
-    pad_chunk(&mut chunk);
-    result.extend(chunk);
-
-    result
+    encode_chunk(*b"AtU8", chunk)
 }
 
 // ImportChunk = <<
@@ -157,15 +154,8 @@ fn encode_imports_chunk() -> Vec<u8> {
     let import_count: u32 = 0;
     chunk.extend(import_count.to_be_bytes());
 
-    let mut result = Vec::new();
-    result.extend("ImpT".as_bytes());
-    result.extend((chunk.len() as u32).to_be_bytes());
-    pad_chunk(&mut chunk);
-    result.extend(chunk);
-
-    result
+    encode_chunk(*b"ImpT", chunk)
 }
-
 
 // ExportChunk = <<
 //   ChunkName:4/unit:8 = "ExpT",
@@ -188,13 +178,7 @@ fn encode_exports_chunk(labels: &HashMap<u32, u32>) -> Vec<u8> {
         chunk.extend(label.to_be_bytes());
     }
 
-    let mut result = Vec::new();
-    result.extend("ExpT".as_bytes());
-    result.extend((chunk.len() as u32).to_be_bytes());
-    pad_chunk(&mut chunk);
-    result.extend(chunk);
-
-    result
+    encode_chunk(*b"ExpT", chunk)
 }
 
 // StringChunk = <<
@@ -204,10 +188,7 @@ fn encode_exports_chunk(labels: &HashMap<u32, u32>) -> Vec<u8> {
 //   Padding4:0..3/unit:8
 // >>
 fn encode_string_chunk() -> Vec<u8> {
-    let mut chunk = Vec::new();
-    chunk.extend("StrT".as_bytes());
-    chunk.extend(0u32.to_be_bytes());
-    chunk
+    encode_chunk(*b"StrT", vec![])
 }
 
 #[derive(Default)]
