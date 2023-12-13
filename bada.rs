@@ -64,7 +64,7 @@ fn pad_chunk(chunk: &mut Vec<u8>) {
 //   Code:(ChunkSize-SubSize)/binary,  % all remaining data
 //   Padding4:0..3/unit:8
 // >>
-fn code_chunk(program: &HashMap<&str, usize>, atoms: &mut Atoms, labels: &mut HashMap<u32, u32>) -> Vec<u8> {
+fn encode_code_chunk(program: &HashMap<&str, usize>, atoms: &mut Atoms, labels: &mut HashMap<u32, u32>) -> Vec<u8> {
     let mut label_count: u32 = 0;
     let mut function_count: u32 = 0;
 
@@ -125,7 +125,7 @@ fn code_chunk(program: &HashMap<&str, usize>, atoms: &mut Atoms, labels: &mut Ha
 //   [<<AtomLength:8, AtomName:AtomLength/unit:8>> || repeat NumberOfAtoms],
 //   Padding4:0..3/unit:8
 // >>
-fn atom_chunk(atoms: &Atoms) -> Vec<u8> {
+fn encode_atom_chunk(atoms: &Atoms) -> Vec<u8> {
     let mut chunk = Vec::new();
     chunk.extend((atoms.names.len() as u32).to_be_bytes());
     for atom in atoms.names.iter() {
@@ -152,7 +152,7 @@ fn atom_chunk(atoms: &Atoms) -> Vec<u8> {
 //     >> || repeat ImportCount ],
 //   Padding4:0..3/unit:8
 // >>
-fn imports_chunk() -> Vec<u8> {
+fn encode_imports_chunk() -> Vec<u8> {
     let mut chunk = Vec::new();
     let import_count: u32 = 0;
     chunk.extend(import_count.to_be_bytes());
@@ -177,7 +177,7 @@ fn imports_chunk() -> Vec<u8> {
 //     >> || repeat ExportCount ],
 //   Padding4:0..3/unit:8
 // >>
-fn exports_chunk(labels: &HashMap<u32, u32>) -> Vec<u8> {
+fn encode_exports_chunk(labels: &HashMap<u32, u32>) -> Vec<u8> {
     let mut chunk = Vec::new();
     let export_count: u32 = labels.len() as u32;
     chunk.extend(export_count.to_be_bytes());
@@ -203,7 +203,7 @@ fn exports_chunk(labels: &HashMap<u32, u32>) -> Vec<u8> {
 //   Data:ChunkSize/binary,
 //   Padding4:0..3/unit:8
 // >>
-fn string_chunk() -> Vec<u8> {
+fn encode_string_chunk() -> Vec<u8> {
     let mut chunk = Vec::new();
     chunk.extend("StrT".as_bytes());
     chunk.extend(0u32.to_be_bytes());
@@ -269,11 +269,11 @@ fn main() -> ExitCode {
 
     let mut beam = Vec::new();
     beam.extend("BEAM".as_bytes());
-    beam.extend(code_chunk(&program, &mut atoms, &mut labels));
-    beam.extend(imports_chunk());
-    beam.extend(exports_chunk(&labels));
-    beam.extend(string_chunk());
-    beam.extend(atom_chunk(&atoms));
+    beam.extend(encode_code_chunk(&program, &mut atoms, &mut labels));
+    beam.extend(encode_imports_chunk());
+    beam.extend(encode_exports_chunk(&labels));
+    beam.extend(encode_string_chunk());
+    beam.extend(encode_atom_chunk(&atoms));
 
     let mut bytes: Vec<u8> = Vec::new();
     bytes.extend("FOR1".as_bytes());
