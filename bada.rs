@@ -2,6 +2,7 @@ use std::fs;
 use std::collections::HashMap;
 use std::env;
 use std::path::Path;
+use std::process::ExitCode;
 
 #[repr(u8)]
 enum Tag {
@@ -230,7 +231,7 @@ impl Atoms {
     }
 }
 
-fn main() {
+fn main() -> ExitCode {
     let mut args = env::args();
     let program = args.next().expect("program");
 
@@ -239,12 +240,18 @@ fn main() {
     } else {
         eprintln!("Usage: {program} <bada.boom>");
         eprintln!("ERROR: no input is provided");
-        std::process::exit(1);
+        return ExitCode::FAILURE;
     };
 
     let output_path = Path::new(&input_path).with_extension("beam");
 
-    let content = fs::read_to_string(&input_path).expect(&input_path);
+    let content = match fs::read_to_string(&input_path) {
+        Ok(content) => content,
+        Err(err) => {
+            eprintln!("ERROR: could not load file {input_path}: {err}");
+            return ExitCode::FAILURE;
+        }
+    };
     let mut program: HashMap<&str, usize> = HashMap::new();
     for line in content.lines() {
         if line.len() > 0 {
@@ -275,7 +282,8 @@ fn main() {
 
     if let Err(err) = fs::write(&output_path, &bytes) {
         eprintln!("ERROR: Could not write file {output_path}: {err}", output_path = output_path.display());
-        std::process::exit(1);
+        return ExitCode::FAILURE;
     }
     println!("INFO: Generated {output_path}", output_path = output_path.display());
+    ExitCode::SUCCESS
 }
