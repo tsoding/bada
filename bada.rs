@@ -232,11 +232,12 @@ impl Atoms {
 
 fn main() {
     let mut args = env::args();
-    let _program = args.next().expect("program");
+    let program = args.next().expect("program");
 
     let input_path = if let Some(input_path) = args.next() {
         input_path
     } else {
+        eprintln!("Usage: {program} <bada.boom>");
         eprintln!("ERROR: no input is provided");
         std::process::exit(1);
     };
