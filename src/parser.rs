@@ -1,5 +1,5 @@
 use diag;
-use lex;
+use lex::{Token, TokenKind, Lexer};
 use std::collections::HashMap;
 
 pub enum Expr {
@@ -7,17 +7,27 @@ pub enum Expr {
     Sum{lhs: Box<Expr>, rhs: Box<Expr>}
 }
 
-pub fn parse_program(lexer: &mut lex::Lexer) -> Option<HashMap<String, Expr>> {
-    let mut program = HashMap::new();
+pub struct Func {
+    pub name: Token,
+    pub body: Expr,
+}
+
+#[derive(Default)]
+pub struct Program {
+    pub funcs: HashMap<String, Func>,
+}
+
+pub fn parse_program(lexer: &mut Lexer) -> Option<Program> {
+    let mut program = Program::default();
     loop {
-        let ident = lexer.expect_tokens(&[
-            lex::TokenKind::Ident,
-            lex::TokenKind::End
+        let name = lexer.expect_tokens(&[
+            TokenKind::Ident,
+            TokenKind::End
         ])?;
-        match ident.kind {
-            lex::TokenKind::Ident => {
-                let _ = lexer.expect_tokens(&[lex::TokenKind::Equals])?;
-                let number = lexer.expect_tokens(&[lex::TokenKind::Number])?;
+        match name.kind {
+            TokenKind::Ident => {
+                let _ = lexer.expect_tokens(&[TokenKind::Equals])?;
+                let number = lexer.expect_tokens(&[TokenKind::Number])?;
                 let lhs = match number.text.parse::<usize>() {
                     Ok(lhs) => lhs,
                     Err(err) => {
@@ -26,15 +36,18 @@ pub fn parse_program(lexer: &mut lex::Lexer) -> Option<HashMap<String, Expr>> {
                     }
                 };
                 let token = lexer.expect_tokens(&[
-                    lex::TokenKind::SemiColon,
-                    lex::TokenKind::Plus,
+                    TokenKind::SemiColon,
+                    TokenKind::Plus,
                 ])?;
                 match token.kind {
-                    lex::TokenKind::SemiColon => {
-                        program.insert(ident.text, Expr::Number(lhs));
+                    TokenKind::SemiColon => {
+                        program.funcs.insert(name.text.clone(), Func {
+                            name,
+                            body: Expr::Number(lhs)
+                        });
                     }
-                    lex::TokenKind::Plus => {
-                        let number = lexer.expect_tokens(&[lex::TokenKind::Number])?;
+                    TokenKind::Plus => {
+                        let number = lexer.expect_tokens(&[TokenKind::Number])?;
                         let rhs = match number.text.parse::<usize>() {
                             Ok(rhs) => rhs,
                             Err(err) => {
@@ -42,16 +55,19 @@ pub fn parse_program(lexer: &mut lex::Lexer) -> Option<HashMap<String, Expr>> {
                                 return None
                             }
                         };
-                        program.insert(ident.text, Expr::Sum{
-                            lhs: Box::new(Expr::Number(lhs)),
-                            rhs: Box::new(Expr::Number(rhs)),
+                        program.funcs.insert(name.text.clone(), Func {
+                            name,
+                            body: Expr::Sum{
+                                lhs: Box::new(Expr::Number(lhs)),
+                                rhs: Box::new(Expr::Number(rhs)),
+                            }
                         });
-                        lexer.expect_tokens(&[lex::TokenKind::SemiColon])?;
+                        lexer.expect_tokens(&[TokenKind::SemiColon])?;
                     }
                     _ => unreachable!(),
                 }
             }
-            lex::TokenKind::End => return Some(program),
+            TokenKind::End => return Some(program),
             _ => unreachable!(),
         }
     }

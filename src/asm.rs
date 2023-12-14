@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use parser::Expr;
+use parser::{Expr, Program, Func};
 
 #[repr(u8)]
 enum Tag {
@@ -104,12 +104,12 @@ fn compile_expr(expr: &Expr, atoms: &mut Atoms, imports: &HashMap<(u32, u32, u32
 //   Code:(ChunkSize-SubSize)/binary,  % all remaining data
 //   Padding4:0..3/unit:8
 // >>
-pub fn encode_code_chunk<'a>(program: &'a HashMap<String, Expr>, imports: &HashMap<(u32, u32, u32), u32>, atoms: &mut Atoms, labels: &mut HashMap<u32, u32>) -> Vec<u8> {
+pub fn encode_code_chunk<'a>(program: &'a Program, imports: &HashMap<(u32, u32, u32), u32>, atoms: &mut Atoms, labels: &mut HashMap<u32, u32>) -> Vec<u8> {
     let mut label_count: u32 = 0;
     let mut function_count: u32 = 0;
 
     let mut code = Vec::new();
-    for (name, expr) in program.iter() {
+    for (_, Func{name, body}) in program.funcs.iter() {
         function_count += 1;
 
         label_count += 1;
@@ -118,7 +118,7 @@ pub fn encode_code_chunk<'a>(program: &'a HashMap<String, Expr>, imports: &HashM
 
         code.push(OpCode::FuncInfo as u8);
         code.extend(encode_arg(Tag::A, atoms.get_id("bada") as i32));
-        let name_id = atoms.get_id(&name);
+        let name_id = atoms.get_id(&name.text);
         code.extend(encode_arg(Tag::A, name_id as i32));
         code.extend(encode_arg(Tag::U, 0));
 
@@ -128,7 +128,7 @@ pub fn encode_code_chunk<'a>(program: &'a HashMap<String, Expr>, imports: &HashM
         labels.insert(name_id as u32, label_count);
 
         let mut stack_size = 0;
-        compile_expr(expr, atoms, imports, &mut code, &mut stack_size);
+        compile_expr(body, atoms, imports, &mut code, &mut stack_size);
 
         code.push(OpCode::Return as u8);
     }

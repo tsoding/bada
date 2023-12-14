@@ -78,7 +78,7 @@ impl<'a> Lexer<'a> {
         self.content[self.pos..].starts_with(prefix)
     }
 
-    pub fn next_token(&mut self) -> Token {
+    fn next_token(&mut self) -> Token {
         self.trim_whitespaces();
 
         let loc = Loc {
