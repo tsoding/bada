@@ -6,6 +6,7 @@ use std::process::ExitCode;
 
 mod asm {
     use std::collections::HashMap;
+    use parser::Expr;
 
     #[repr(u8)]
     enum Tag {
@@ -14,7 +15,7 @@ mod asm {
         A = 2,
         X = 3,
         // Y = 4,
-        // F = 5,
+        F = 5,
         // H = 6,
         // Z = 7,
     }
@@ -46,6 +47,7 @@ mod asm {
         IntCodeEnd = 3,
         Return = 19,
         Move = 64,
+        GcBif2 = 125,
     }
 
     // aaaa|aaaa|a000|
@@ -64,6 +66,40 @@ mod asm {
         result
     }
 
+    // X0, X1, X2, X3, ..., X1000
+    //          ^
+
+    fn compile_expr(expr: &Expr, atoms: &mut Atoms, imports: &HashMap<(u32, u32, u32), u32>, code: &mut Vec<u8>, stack_size: &mut usize) {
+        match expr {
+            Expr::Number(x) => {
+                code.push(OpCode::Move as u8);
+                code.extend(encode_arg(Tag::I, (*x) as i32));
+                code.extend(encode_arg(Tag::X, (*stack_size) as i32));
+                *stack_size += 1;
+            },
+            Expr::Sum{lhs, rhs} => {
+                compile_expr(lhs, atoms, imports, code, stack_size);
+                compile_expr(rhs, atoms, imports, code, stack_size);
+
+                assert!(*stack_size >= 2);
+
+                let bif2_plus = imports
+                    .get(&resolve_function_signature(atoms, "erlang", "+", 2))
+                    .cloned()
+                    .expect("erlang:'+' should be always present");
+
+                code.push(OpCode::GcBif2 as u8);
+                code.extend(encode_arg(Tag::F, 0)); // Lbl
+                code.extend(encode_arg(Tag::U, 2)); // Live
+                code.extend(encode_arg(Tag::U, bif2_plus as i32)); // Bif
+                code.extend(encode_arg(Tag::X, (*stack_size - 2) as i32)); // Arg1
+                code.extend(encode_arg(Tag::X, (*stack_size - 1) as i32)); // Arg2
+                code.extend(encode_arg(Tag::X, (*stack_size - 2) as i32)); // Res
+                *stack_size -= 1;
+            },
+        }
+    }
+
     // CodeChunk = <<
     //   ChunkName:4/unit:8 = "Code",
     //   ChunkSize:32/big,
@@ -75,12 +111,12 @@ mod asm {
     //   Code:(ChunkSize-SubSize)/binary,  % all remaining data
     //   Padding4:0..3/unit:8
     // >>
-    pub fn encode_code_chunk<'a>(program: &'a HashMap<String, usize>, atoms: &mut Atoms<'a>, labels: &mut HashMap<u32, u32>) -> Vec<u8> {
+    pub fn encode_code_chunk<'a>(program: &'a HashMap<String, Expr>, imports: &HashMap<(u32, u32, u32), u32>, atoms: &mut Atoms, labels: &mut HashMap<u32, u32>) -> Vec<u8> {
         let mut label_count: u32 = 0;
         let mut function_count: u32 = 0;
 
         let mut code = Vec::new();
-        for (name, result) in program.iter() {
+        for (name, expr) in program.iter() {
             function_count += 1;
 
             label_count += 1;
@@ -98,9 +134,8 @@ mod asm {
             code.extend(encode_arg(Tag::U, label_count as i32));
             labels.insert(name_id as u32, label_count);
 
-            code.push(OpCode::Move as u8);
-            code.extend(encode_arg(Tag::I, (*result) as i32));
-            code.extend(encode_arg(Tag::X, 0));
+            let mut stack_size = 0;
+            compile_expr(expr, atoms, imports, &mut code, &mut stack_size);
 
             code.push(OpCode::Return as u8);
         }
@@ -141,6 +176,12 @@ mod asm {
         encode_chunk(*b"AtU8", chunk)
     }
 
+    fn resolve_function_signature(atoms: &mut Atoms, module: &str, func: &str, arity: u32) -> (u32, u32, u32) {
+        (atoms.get_id(module) as u32,
+         atoms.get_id(func) as u32,
+         arity)
+    }
+
     // ImportChunk = <<
     //   ChunkName:4/unit:8 = "ImpT",
     //   ChunkSize:32/big,
@@ -151,10 +192,15 @@ mod asm {
     //     >> || repeat ImportCount ],
     //   Padding4:0..3/unit:8
     // >>
-    pub fn encode_imports_chunk() -> Vec<u8> {
+    pub fn encode_imports_chunk(atoms: &mut Atoms, imports: &mut HashMap<(u32, u32, u32), u32>) -> Vec<u8> {
         let mut chunk = Vec::new();
-        let import_count: u32 = 0;
+        let import_count: u32 = 1;
         chunk.extend(import_count.to_be_bytes());
+        let (module, func, arity) = resolve_function_signature(atoms, "erlang", "+", 2);
+        chunk.extend(module.to_be_bytes());
+        chunk.extend(func.to_be_bytes());
+        chunk.extend(arity.to_be_bytes());
+        imports.insert((module, func, arity), 0);
 
         encode_chunk(*b"ImpT", chunk)
     }
@@ -194,21 +240,21 @@ mod asm {
     }
 
     #[derive(Default)]
-    pub struct Atoms<'a> {
-        names: Vec<&'a str>,
+    pub struct Atoms {
+        names: Vec<String>,
     }
 
-    impl<'a> Atoms<'a> {
-        fn get_id(&mut self, needle: &'a str) -> usize {
+    impl Atoms {
+        pub fn get_id(&mut self, needle: &str) -> usize {
             let result = self.names
                 .iter()
                 .enumerate()
-                .find(|(_, &name)| name == needle)
+                .find(|(_, name)| name == &needle)
                 .map(|(index, _)| index + 1);
             if let Some(id) = result {
                 id
             } else {
-                self.names.push(needle);
+                self.names.push(needle.to_string());
                 self.names.len()
             }
         }
@@ -246,6 +292,8 @@ mod lex {
     pub enum TokenKind {
         Ident,
         Equals,
+        Plus,
+        SemiColon,
         Number,
         End,
         Unknown
@@ -255,7 +303,9 @@ mod lex {
         fn human(&self) -> &str {
             match self {
                 Self::Ident => "identifier",
-                Self::Equals => "equals sign",
+                Self::Equals => "equals",
+                Self::Plus => "plus",
+                Self::SemiColon => "semi-colon",
                 Self::Number => "number",
                 Self::End => "end of input",
                 Self::Unknown => "unknown token",
@@ -360,6 +410,22 @@ mod lex {
             }
 
             match x {
+                ';' => {
+                    self.chop_char();
+                    return Token {
+                        text: x.to_string(),
+                        loc,
+                        kind: TokenKind::SemiColon,
+                    }
+                }
+                '+' => {
+                    self.chop_char();
+                    return Token {
+                        text: x.to_string(),
+                        loc,
+                        kind: TokenKind::Plus,
+                    }
+                }
                 '=' => {
                     self.chop_char();
                     return Token {
@@ -406,22 +472,53 @@ mod parser {
     use lex;
     use std::collections::HashMap;
 
-    pub fn parse_program(lexer: &mut lex::Lexer) -> Option<HashMap<String, usize>> {
-        let mut program: HashMap<String, usize> = HashMap::new();
+    pub enum Expr {
+        Number(usize),
+        Sum{lhs: Box<Expr>, rhs: Box<Expr>}
+    }
+
+    pub fn parse_program(lexer: &mut lex::Lexer) -> Option<HashMap<String, Expr>> {
+        let mut program = HashMap::new();
         loop {
-            let ident = lexer.expect_tokens(&[lex::TokenKind::Ident, lex::TokenKind::End])?;
+            let ident = lexer.expect_tokens(&[
+                lex::TokenKind::Ident,
+                lex::TokenKind::End
+            ])?;
             match ident.kind {
                 lex::TokenKind::Ident => {
                     let _ = lexer.expect_tokens(&[lex::TokenKind::Equals])?;
                     let number = lexer.expect_tokens(&[lex::TokenKind::Number])?;
-                    match number.text.parse::<usize>() {
-                        Ok(x) => {
-                            program.insert(ident.text, x);
-                        }
+                    let lhs = match number.text.parse::<usize>() {
+                        Ok(lhs) => lhs,
                         Err(err) => {
                             report!(&number.loc, "ERROR", "Could not parse number: {err}");
                             return None
                         }
+                    };
+                    let token = lexer.expect_tokens(&[
+                        lex::TokenKind::SemiColon,
+                        lex::TokenKind::Plus,
+                    ])?;
+                    match token.kind {
+                        lex::TokenKind::SemiColon => {
+                            program.insert(ident.text, Expr::Number(lhs));
+                        }
+                        lex::TokenKind::Plus => {
+                            let number = lexer.expect_tokens(&[lex::TokenKind::Number])?;
+                            let rhs = match number.text.parse::<usize>() {
+                                Ok(rhs) => rhs,
+                                Err(err) => {
+                                    report!(&number.loc, "ERROR", "Could not parse number: {err}");
+                                    return None
+                                }
+                            };
+                            program.insert(ident.text, Expr::Sum{
+                                lhs: Box::new(Expr::Number(lhs)),
+                                rhs: Box::new(Expr::Number(rhs)),
+                            });
+                            lexer.expect_tokens(&[lex::TokenKind::SemiColon])?;
+                        }
+                        _ => unreachable!(),
                     }
                 }
                 lex::TokenKind::End => return Some(program),
@@ -461,11 +558,14 @@ fn main() -> ExitCode {
 
     let mut atoms = asm::Atoms::default();
     let mut labels: HashMap<u32, u32> = HashMap::new();
+    let mut imports: HashMap<(u32, u32, u32), u32> = HashMap::new();
+
+    let _ = atoms.get_id("bada");
 
     let mut beam = Vec::new();
     beam.extend("BEAM".as_bytes());
-    beam.extend(asm::encode_code_chunk(&program, &mut atoms, &mut labels));
-    beam.extend(asm::encode_imports_chunk());
+    beam.extend(asm::encode_imports_chunk(&mut atoms, &mut imports));
+    beam.extend(asm::encode_code_chunk(&program, &imports, &mut atoms, &mut labels));
     beam.extend(asm::encode_exports_chunk(&labels));
     beam.extend(asm::encode_string_chunk());
     beam.extend(asm::encode_atom_chunk(&atoms));
