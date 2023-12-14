@@ -8,7 +8,7 @@ Install dependencies:
 - [Rust](https://www.rust-lang.org/)
 - [Erlang](https://www.erlang.org/)
 
-Compile the Compiler (we don't use Cargo because we don't have any thirdpart dependencies yet):
+Compile the Compiler (we don't use Cargo because we don't have any thirdparty dependencies yet):
 
 ```console
 $ rustc ./src/bada.rs
