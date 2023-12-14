@@ -288,7 +288,7 @@ mod diag {
 mod lex {
     use diag::Loc;
 
-    #[derive(PartialEq)]
+    #[derive(Clone, Copy, PartialEq)]
     pub enum TokenKind {
         Ident,
         Equals,
@@ -298,6 +298,12 @@ mod lex {
         End,
         Unknown
     }
+
+    const FIXED_TOKENS: &[(&[char], TokenKind)] = &[
+        (&[';'], TokenKind::SemiColon),
+        (&['+'], TokenKind::Plus),
+        (&['='], TokenKind::Equals),
+    ];
 
     impl TokenKind {
         fn human(&self) -> &str {
@@ -356,6 +362,10 @@ mod lex {
             None
         }
 
+        fn starts_with(&self, prefix: &[char]) -> bool {
+            self.content[self.pos..].starts_with(prefix)
+        }
+
         pub fn next_token(&mut self) -> Token {
             self.trim_whitespaces();
 
@@ -409,32 +419,15 @@ mod lex {
                 }
             }
 
-            match x {
-                ';' => {
-                    self.chop_char();
+            for &(prefix, kind) in FIXED_TOKENS.iter() {
+                if self.starts_with(prefix) {
+                    self.chop_chars(prefix.len());
                     return Token {
-                        text: x.to_string(),
+                        text: prefix.iter().collect(),
                         loc,
-                        kind: TokenKind::SemiColon,
+                        kind,
                     }
                 }
-                '+' => {
-                    self.chop_char();
-                    return Token {
-                        text: x.to_string(),
-                        loc,
-                        kind: TokenKind::Plus,
-                    }
-                }
-                '=' => {
-                    self.chop_char();
-                    return Token {
-                        text: x.to_string(),
-                        loc,
-                        kind: TokenKind::Equals,
-                    }
-                }
-                _ => {}
             }
 
             self.chop_char();
@@ -462,6 +455,12 @@ mod lex {
                     self.row += 1;
                     self.bol = self.pos;
                 }
+            }
+        }
+
+        fn chop_chars(&mut self, n: usize) {
+            for _ in 0..n {
+                self.chop_char()
             }
         }
     }
