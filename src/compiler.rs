@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use parser::{Expr, Program, Func};
+use parser::{Expr, Module, Func};
 
 #[repr(u8)]
 enum Tag {
@@ -104,12 +104,12 @@ fn compile_expr(expr: &Expr, atoms: &mut Atoms, imports: &HashMap<(u32, u32, u32
 //   Code:(ChunkSize-SubSize)/binary,  % all remaining data
 //   Padding4:0..3/unit:8
 // >>
-pub fn encode_code_chunk<'a>(program: &'a Program, imports: &HashMap<(u32, u32, u32), u32>, atoms: &mut Atoms, labels: &mut HashMap<u32, u32>) -> Vec<u8> {
+pub fn encode_code_chunk<'a>(module: &'a Module, imports: &HashMap<(u32, u32, u32), u32>, atoms: &mut Atoms, labels: &mut HashMap<u32, u32>) -> Vec<u8> {
     let mut label_count: u32 = 0;
     let mut function_count: u32 = 0;
 
     let mut code = Vec::new();
-    for (_, Func{name, body}) in program.funcs.iter() {
+    for (_, Func{name, body}) in module.funcs.iter() {
         function_count += 1;
 
         label_count += 1;

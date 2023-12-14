@@ -13,12 +13,12 @@ pub struct Func {
 }
 
 #[derive(Default)]
-pub struct Program {
+pub struct Module {
     pub funcs: HashMap<String, Func>,
 }
 
-pub fn parse_program(lexer: &mut Lexer) -> Option<Program> {
-    let mut program = Program::default();
+pub fn parse_module(lexer: &mut Lexer) -> Option<Module> {
+    let mut module = Module::default();
     loop {
         let name = lexer.expect_tokens(&[
             TokenKind::Ident,
@@ -41,7 +41,7 @@ pub fn parse_program(lexer: &mut Lexer) -> Option<Program> {
                 ])?;
                 match token.kind {
                     TokenKind::SemiColon => {
-                        program.funcs.insert(name.text.clone(), Func {
+                        module.funcs.insert(name.text.clone(), Func {
                             name,
                             body: Expr::Number(lhs)
                         });
@@ -55,7 +55,7 @@ pub fn parse_program(lexer: &mut Lexer) -> Option<Program> {
                                 return None
                             }
                         };
-                        program.funcs.insert(name.text.clone(), Func {
+                        module.funcs.insert(name.text.clone(), Func {
                             name,
                             body: Expr::Sum{
                                 lhs: Box::new(Expr::Number(lhs)),
@@ -67,7 +67,7 @@ pub fn parse_program(lexer: &mut Lexer) -> Option<Program> {
                     _ => unreachable!(),
                 }
             }
-            TokenKind::End => return Some(program),
+            TokenKind::End => return Some(module),
             _ => unreachable!(),
         }
     }

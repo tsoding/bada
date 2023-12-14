@@ -32,8 +32,8 @@ fn main() -> ExitCode {
         }
     };
     let mut lexer = lex::Lexer::new(&content, input_path.clone());
-    let program = if let Some(program) = parser::parse_program(&mut lexer) {
-        program
+    let module = if let Some(module) = parser::parse_module(&mut lexer) {
+        module
     } else {
         return ExitCode::FAILURE;
     };
@@ -47,7 +47,7 @@ fn main() -> ExitCode {
     let mut beam = Vec::new();
     beam.extend("BEAM".as_bytes());
     beam.extend(compiler::encode_imports_chunk(&mut atoms, &mut imports));
-    beam.extend(compiler::encode_code_chunk(&program, &imports, &mut atoms, &mut labels));
+    beam.extend(compiler::encode_code_chunk(&module, &imports, &mut atoms, &mut labels));
     beam.extend(compiler::encode_exports_chunk(&labels));
     beam.extend(compiler::encode_string_chunk());
     beam.extend(compiler::encode_atom_chunk(&atoms));
