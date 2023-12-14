@@ -2,9 +2,28 @@ use diag;
 use lex::{Token, TokenKind, Lexer};
 use std::collections::HashMap;
 
+pub enum BinopKind {
+    Sum,
+    Sub,
+}
+
+fn binop_of_token(kind: TokenKind) -> Option<BinopKind> {
+    match kind {
+        TokenKind::Plus => Some(BinopKind::Sum),
+        TokenKind::Minus => Some(BinopKind::Sub),
+        _ => None,
+    }
+}
+
+pub struct Binop {
+    pub kind: BinopKind,
+    pub lhs: Box<Expr>,
+    pub rhs: Box<Expr>
+}
+
 pub enum Expr {
     Number(usize),
-    Sum{lhs: Box<Expr>, rhs: Box<Expr>}
+    Binop(Binop),
 }
 
 pub struct Func {
@@ -38,6 +57,7 @@ pub fn parse_module(lexer: &mut Lexer) -> Option<Module> {
                 let token = lexer.expect_tokens(&[
                     TokenKind::SemiColon,
                     TokenKind::Plus,
+                    TokenKind::Minus,
                 ])?;
                 match token.kind {
                     TokenKind::SemiColon => {
@@ -46,7 +66,7 @@ pub fn parse_module(lexer: &mut Lexer) -> Option<Module> {
                             body: Expr::Number(lhs)
                         });
                     }
-                    TokenKind::Plus => {
+                    TokenKind::Plus | TokenKind::Minus => {
                         let number = lexer.expect_tokens(&[TokenKind::Number])?;
                         let rhs = match number.text.parse::<usize>() {
                             Ok(rhs) => rhs,
@@ -57,10 +77,11 @@ pub fn parse_module(lexer: &mut Lexer) -> Option<Module> {
                         };
                         module.funcs.insert(name.text.clone(), Func {
                             name,
-                            body: Expr::Sum{
+                            body: Expr::Binop(Binop {
+                                kind: binop_of_token(token.kind).expect("binop kind"),
                                 lhs: Box::new(Expr::Number(lhs)),
                                 rhs: Box::new(Expr::Number(rhs)),
-                            }
+                            })
                         });
                         lexer.expect_tokens(&[TokenKind::SemiColon])?;
                     }

@@ -1,16 +1,16 @@
 use std::collections::HashMap;
-use parser::{Expr, Module, Func};
+use parser::{Expr, Module, Func, BinopKind, Binop};
 
 #[repr(u8)]
 enum Tag {
-    U = 0,
-    I = 1,
-    A = 2,
-    X = 3,
-    // Y = 4,
-    F = 5,
-    // H = 6,
-    // Z = 7,
+    U = 0,                      // unsigned?
+    I = 1,                      // integer
+    A = 2,                      // atom
+    X = 3,                      // x register
+    // Y = 4,                   // y register
+    F = 5,                      // label
+    // H = 6,                   // character?
+    // Z = 7,                   // ?
 }
 
 fn encode_arg(tag: Tag, n: i32) -> Vec<u8> {
@@ -59,9 +59,6 @@ fn encode_chunk(tag: [u8; 4], chunk: Vec<u8>) -> Vec<u8> {
     result
 }
 
-// X0, X1, X2, X3, ..., X1000
-//          ^
-
 fn compile_expr(expr: &Expr, atoms: &mut Atoms, imports: &HashMap<(u32, u32, u32), u32>, code: &mut Vec<u8>, stack_size: &mut usize) {
     match expr {
         Expr::Number(x) => {
@@ -70,21 +67,26 @@ fn compile_expr(expr: &Expr, atoms: &mut Atoms, imports: &HashMap<(u32, u32, u32
             code.extend(encode_arg(Tag::X, (*stack_size) as i32));
             *stack_size += 1;
         },
-        Expr::Sum{lhs, rhs} => {
+        Expr::Binop(Binop{kind, lhs, rhs}) => {
             compile_expr(lhs, atoms, imports, code, stack_size);
             compile_expr(rhs, atoms, imports, code, stack_size);
 
             assert!(*stack_size >= 2);
 
-            let bif2_plus = imports
-                .get(&resolve_function_signature(atoms, "erlang", "+", 2))
-                .cloned()
-                .expect("erlang:'+' should be always present");
-
             code.push(OpCode::GcBif2 as u8);
             code.extend(encode_arg(Tag::F, 0)); // Lbl
             code.extend(encode_arg(Tag::U, 2)); // Live
-            code.extend(encode_arg(Tag::U, bif2_plus as i32)); // Bif
+            let bif2 = match kind {
+                BinopKind::Sum => imports
+                    .get(&resolve_function_signature(atoms, "erlang", "+", 2))
+                    .cloned()
+                    .expect("erlang:'+' should be always present"),
+                BinopKind::Sub => imports
+                    .get(&resolve_function_signature(atoms, "erlang", "-", 2))
+                    .cloned()
+                    .expect("erlang:'-' should be always present"),
+            };
+            code.extend(encode_arg(Tag::U, bif2 as i32)); // Bif
             code.extend(encode_arg(Tag::X, (*stack_size - 2) as i32)); // Arg1
             code.extend(encode_arg(Tag::X, (*stack_size - 1) as i32)); // Arg2
             code.extend(encode_arg(Tag::X, (*stack_size - 2) as i32)); // Res
@@ -187,13 +189,20 @@ fn resolve_function_signature(atoms: &mut Atoms, module: &str, func: &str, arity
 // >>
 fn encode_imports_chunk(atoms: &mut Atoms, imports: &mut HashMap<(u32, u32, u32), u32>) -> Vec<u8> {
     let mut chunk = Vec::new();
-    let import_count: u32 = 1;
+    let import_count: u32 = 2;
     chunk.extend(import_count.to_be_bytes());
+
     let (module, func, arity) = resolve_function_signature(atoms, "erlang", "+", 2);
     chunk.extend(module.to_be_bytes());
     chunk.extend(func.to_be_bytes());
     chunk.extend(arity.to_be_bytes());
     imports.insert((module, func, arity), 0);
+
+    let (module, func, arity) = resolve_function_signature(atoms, "erlang", "-", 2);
+    chunk.extend(module.to_be_bytes());
+    chunk.extend(func.to_be_bytes());
+    chunk.extend(arity.to_be_bytes());
+    imports.insert((module, func, arity), 1);
 
     encode_chunk(*b"ImpT", chunk)
 }

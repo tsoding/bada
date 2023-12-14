@@ -3,28 +3,35 @@ use diag::Loc;
 #[derive(Clone, Copy, PartialEq)]
 pub enum TokenKind {
     Ident,
+    Number,
+
     Equals,
     Plus,
+    Minus,
     SemiColon,
-    Number,
+
     End,
     Unknown
 }
 
 const FIXED_TOKENS: &[(&[char], TokenKind)] = &[
-    (&[';'], TokenKind::SemiColon),
-    (&['+'], TokenKind::Plus),
     (&['='], TokenKind::Equals),
+    (&['+'], TokenKind::Plus),
+    (&['-'], TokenKind::Minus),
+    (&[';'], TokenKind::SemiColon),
 ];
 
 impl TokenKind {
     fn human(&self) -> &str {
         match self {
             Self::Ident => "identifier",
+            Self::Number => "number",
+
             Self::Equals => "equals",
             Self::Plus => "plus",
+            Self::Minus => "minus",
             Self::SemiColon => "semi-colon",
-            Self::Number => "number",
+
             Self::End => "end of input",
             Self::Unknown => "unknown token",
         }
