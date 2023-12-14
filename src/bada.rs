@@ -4,7 +4,7 @@ use std::env;
 use std::path::Path;
 use std::process::ExitCode;
 
-mod asm;
+mod compiler;
 #[macro_use]
 mod diag;
 mod lex;
@@ -38,7 +38,7 @@ fn main() -> ExitCode {
         return ExitCode::FAILURE;
     };
 
-    let mut atoms = asm::Atoms::default();
+    let mut atoms = compiler::Atoms::default();
     let mut labels: HashMap<u32, u32> = HashMap::new();
     let mut imports: HashMap<(u32, u32, u32), u32> = HashMap::new();
 
@@ -46,11 +46,11 @@ fn main() -> ExitCode {
 
     let mut beam = Vec::new();
     beam.extend("BEAM".as_bytes());
-    beam.extend(asm::encode_imports_chunk(&mut atoms, &mut imports));
-    beam.extend(asm::encode_code_chunk(&program, &imports, &mut atoms, &mut labels));
-    beam.extend(asm::encode_exports_chunk(&labels));
-    beam.extend(asm::encode_string_chunk());
-    beam.extend(asm::encode_atom_chunk(&atoms));
+    beam.extend(compiler::encode_imports_chunk(&mut atoms, &mut imports));
+    beam.extend(compiler::encode_code_chunk(&program, &imports, &mut atoms, &mut labels));
+    beam.extend(compiler::encode_exports_chunk(&labels));
+    beam.extend(compiler::encode_string_chunk());
+    beam.extend(compiler::encode_atom_chunk(&atoms));
 
     let mut bytes: Vec<u8> = Vec::new();
     bytes.extend("FOR1".as_bytes());
