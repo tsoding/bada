@@ -4,12 +4,34 @@ Simple Programming Language that compiles to BEAM bytecode.
 
 ## Quick Start
 
+Install dependencies:
+- [Rust](https://www.rust-lang.org/)
+- [Erlang](https://www.erlang.org/)
+
+Compile the Compiler (we don't use Cargo because we don't have any thirdpart dependencies yet):
+
 ```console
-$ rustc bada.rs
-$ cat ./bada.boom
-$ ./bada ./bada.boom
+$ rustc ./src/bada.rs
+```
+
+Compile an example using the Compiler:
+
+```console
+$ ./bada ./examples/bada.boom
+```
+
+Load the example into Erlang environment:
+
+```console
 $ erl
-1> code:load_file(bada).
-2> bada:hello().
-3> bada:world().
+> code:add_path("./examples/").
+> code:load_file(bada).
+> bada:hello().
+> bada:world().
+```
+
+To reload the Example module:
+
+```console
+> code:purge(bada), code:load_file(bada).
 ```
