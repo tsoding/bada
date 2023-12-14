@@ -1,5 +1,4 @@
 use std::fs;
-use std::collections::HashMap;
 use std::env;
 use std::path::Path;
 use std::process::ExitCode;
@@ -38,20 +37,7 @@ fn main() -> ExitCode {
         return ExitCode::FAILURE;
     };
 
-    let mut atoms = compiler::Atoms::default();
-    let mut labels: HashMap<u32, u32> = HashMap::new();
-    let mut imports: HashMap<(u32, u32, u32), u32> = HashMap::new();
-
-    let _ = atoms.get_id("bada");
-
-    let mut beam = Vec::new();
-    beam.extend("BEAM".as_bytes());
-    beam.extend(compiler::encode_imports_chunk(&mut atoms, &mut imports));
-    beam.extend(compiler::encode_code_chunk(&module, &imports, &mut atoms, &mut labels));
-    beam.extend(compiler::encode_exports_chunk(&labels));
-    beam.extend(compiler::encode_string_chunk());
-    beam.extend(compiler::encode_atom_chunk(&atoms));
-
+    let beam = compiler::compile_beam_module(&module);
     let mut bytes: Vec<u8> = Vec::new();
     bytes.extend("FOR1".as_bytes());
     bytes.extend((beam.len() as u32).to_be_bytes());

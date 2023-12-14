@@ -104,7 +104,7 @@ fn compile_expr(expr: &Expr, atoms: &mut Atoms, imports: &HashMap<(u32, u32, u32
 //   Code:(ChunkSize-SubSize)/binary,  % all remaining data
 //   Padding4:0..3/unit:8
 // >>
-pub fn encode_code_chunk<'a>(module: &'a Module, imports: &HashMap<(u32, u32, u32), u32>, atoms: &mut Atoms, labels: &mut HashMap<u32, u32>) -> Vec<u8> {
+fn encode_code_chunk<'a>(module: &'a Module, imports: &HashMap<(u32, u32, u32), u32>, atoms: &mut Atoms, labels: &mut HashMap<u32, u32>) -> Vec<u8> {
     let mut label_count: u32 = 0;
     let mut function_count: u32 = 0;
 
@@ -158,7 +158,7 @@ pub fn encode_code_chunk<'a>(module: &'a Module, imports: &HashMap<(u32, u32, u3
 //   [<<AtomLength:8, AtomName:AtomLength/unit:8>> || repeat NumberOfAtoms],
 //   Padding4:0..3/unit:8
 // >>
-pub fn encode_atom_chunk(atoms: &Atoms) -> Vec<u8> {
+fn encode_atom_chunk(atoms: &Atoms) -> Vec<u8> {
     let mut chunk = Vec::new();
     chunk.extend((atoms.names.len() as u32).to_be_bytes());
     for atom in atoms.names.iter() {
@@ -185,7 +185,7 @@ fn resolve_function_signature(atoms: &mut Atoms, module: &str, func: &str, arity
 //     >> || repeat ImportCount ],
 //   Padding4:0..3/unit:8
 // >>
-pub fn encode_imports_chunk(atoms: &mut Atoms, imports: &mut HashMap<(u32, u32, u32), u32>) -> Vec<u8> {
+fn encode_imports_chunk(atoms: &mut Atoms, imports: &mut HashMap<(u32, u32, u32), u32>) -> Vec<u8> {
     let mut chunk = Vec::new();
     let import_count: u32 = 1;
     chunk.extend(import_count.to_be_bytes());
@@ -208,7 +208,7 @@ pub fn encode_imports_chunk(atoms: &mut Atoms, imports: &mut HashMap<(u32, u32, 
 //     >> || repeat ExportCount ],
 //   Padding4:0..3/unit:8
 // >>
-pub fn encode_exports_chunk(labels: &HashMap<u32, u32>) -> Vec<u8> {
+fn encode_exports_chunk(labels: &HashMap<u32, u32>) -> Vec<u8> {
     let mut chunk = Vec::new();
     let export_count: u32 = labels.len() as u32;
     chunk.extend(export_count.to_be_bytes());
@@ -228,17 +228,17 @@ pub fn encode_exports_chunk(labels: &HashMap<u32, u32>) -> Vec<u8> {
 //   Data:ChunkSize/binary,
 //   Padding4:0..3/unit:8
 // >>
-pub fn encode_string_chunk() -> Vec<u8> {
+fn encode_string_chunk() -> Vec<u8> {
     encode_chunk(*b"StrT", vec![])
 }
 
 #[derive(Default)]
-pub struct Atoms {
+struct Atoms {
     names: Vec<String>,
 }
 
 impl Atoms {
-    pub fn get_id(&mut self, needle: &str) -> usize {
+    fn get_id(&mut self, needle: &str) -> usize {
         let result = self.names
             .iter()
             .enumerate()
@@ -251,4 +251,22 @@ impl Atoms {
             self.names.len()
         }
     }
+}
+
+pub fn compile_beam_module(module: &Module) -> Vec<u8> {
+    let mut atoms = Atoms::default();
+    let mut labels: HashMap<u32, u32> = HashMap::new();
+    let mut imports: HashMap<(u32, u32, u32), u32> = HashMap::new();
+
+    // TODO: customizable module name
+    let _ = atoms.get_id("bada");
+
+    let mut beam = Vec::new();
+    beam.extend("BEAM".as_bytes());
+    beam.extend(encode_imports_chunk(&mut atoms, &mut imports));
+    beam.extend(encode_code_chunk(&module, &imports, &mut atoms, &mut labels));
+    beam.extend(encode_exports_chunk(&labels));
+    beam.extend(encode_string_chunk());
+    beam.extend(encode_atom_chunk(&atoms));
+    beam
 }
