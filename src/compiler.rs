@@ -267,7 +267,7 @@ pub fn compile_beam_module(module: &Module) -> Vec<u8> {
     let mut labels: HashMap<u32, u32> = HashMap::new();
     let mut imports: HashMap<(u32, u32, u32), u32> = HashMap::new();
 
-    // TODO: customizable module name
+    // TODO: get module name from the stem of the input file
     let _ = atoms.get_id("bada");
 
     let mut beam = Vec::new();
