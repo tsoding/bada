@@ -127,7 +127,7 @@ fn encode_code_chunk<'a>(module: &'a Module, imports: &HashMap<(u32, u32, u32), 
         label_count += 1;
         code.push(OpCode::Label as u8);
         code.extend(encode_arg(Tag::U, label_count as i32));
-        labels.insert(name_id as u32, label_count);
+        labels.insert(name_id, label_count);
 
         let mut stack_size = 0;
         compile_expr(body, atoms, imports, &mut code, &mut stack_size);
@@ -172,8 +172,8 @@ fn encode_atom_chunk(atoms: &Atoms) -> Vec<u8> {
 }
 
 fn resolve_function_signature(atoms: &mut Atoms, module: &str, func: &str, arity: u32) -> (u32, u32, u32) {
-    (atoms.get_id(module) as u32,
-     atoms.get_id(func) as u32,
+    (atoms.get_id(module),
+     atoms.get_id(func),
      arity)
 }
 
@@ -247,17 +247,17 @@ struct Atoms {
 }
 
 impl Atoms {
-    fn get_id(&mut self, needle: &str) -> usize {
+    fn get_id(&mut self, needle: &str) -> u32 {
         let result = self.names
             .iter()
             .enumerate()
             .find(|(_, name)| name == &needle)
             .map(|(index, _)| index + 1);
         if let Some(id) = result {
-            id
+            id as u32
         } else {
             self.names.push(needle.to_string());
-            self.names.len()
+            self.names.len() as u32
         }
     }
 }
