@@ -50,3 +50,5 @@ fn main() -> ExitCode {
     println!("INFO: Generated {output_path}", output_path = output_path.display());
     ExitCode::SUCCESS
 }
+
+// TODO: implement BEAM disassembler as part of bada compiler
