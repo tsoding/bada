@@ -3,9 +3,9 @@ use std::env;
 use std::path::Path;
 use std::process::ExitCode;
 
-mod compiler;
 #[macro_use]
 mod diag;
+mod compiler;
 mod lex;
 mod parser;
 

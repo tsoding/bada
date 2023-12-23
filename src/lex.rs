@@ -9,6 +9,9 @@ pub enum TokenKind {
     Plus,
     Minus,
     SemiColon,
+    OpenParen,
+    ClosedParen,
+    Colon,
 
     End,
     Unknown
@@ -19,6 +22,9 @@ const FIXED_TOKENS: &[(&[char], TokenKind)] = &[
     (&['+'], TokenKind::Plus),
     (&['-'], TokenKind::Minus),
     (&[';'], TokenKind::SemiColon),
+    (&[':'], TokenKind::Colon),
+    (&['('], TokenKind::OpenParen),
+    (&[')'], TokenKind::ClosedParen),
 ];
 
 impl TokenKind {
@@ -31,6 +37,9 @@ impl TokenKind {
             Self::Plus => "plus",
             Self::Minus => "minus",
             Self::SemiColon => "semi-colon",
+            Self::OpenParen => "open paren",
+            Self::ClosedParen => "closed paren",
+            Self::Colon => "colon",
 
             Self::End => "end of input",
             Self::Unknown => "unknown token",

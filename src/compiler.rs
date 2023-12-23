@@ -1,5 +1,6 @@
+use diag::*;
 use std::collections::HashMap;
-use parser::{Expr, Module, Func, BinopKind, Binop};
+use parser::{Expr, Module, Func, BinopKind, Binop, Param};
 
 #[repr(u8)]
 enum Tag {
@@ -59,17 +60,35 @@ fn encode_chunk(tag: [u8; 4], chunk: Vec<u8>) -> Vec<u8> {
     result
 }
 
-fn compile_expr(expr: &Expr, atoms: &mut Atoms, imports: &HashMap<(u32, u32, u32), u32>, code: &mut Vec<u8>, stack_size: &mut usize) {
+
+fn compile_expr(expr: &Expr, atoms: &mut Atoms, imports: &HashMap<(u32, u32, u32), u32>, code: &mut Vec<u8>, params: &Vec<Param>, stack_size: &mut usize) -> Option<()> {
+    let stack_start = params.len();
     match expr {
+        Expr::Var(name) => {
+            match params.iter().enumerate().find(|(_, param)| {param.name.text == name.text}) {
+                Some((i, _)) => {
+                    code.push(OpCode::Move as u8);
+                    code.extend(encode_arg(Tag::X, i as i32));
+                    code.extend(encode_arg(Tag::X, (stack_start + *stack_size) as i32));
+                    *stack_size += 1;
+                    Some(())
+                }
+                None => {
+                    report!(&name.loc, "ERROR", "Unknown variable {name}", name = name.text);
+                    None
+                }
+            }
+        }
         Expr::Number(x) => {
             code.push(OpCode::Move as u8);
             code.extend(encode_arg(Tag::I, (*x) as i32));
-            code.extend(encode_arg(Tag::X, (*stack_size) as i32));
+            code.extend(encode_arg(Tag::X, (stack_start + *stack_size) as i32));
             *stack_size += 1;
+            Some(())
         },
         Expr::Binop(Binop{kind, lhs, rhs}) => {
-            compile_expr(lhs, atoms, imports, code, stack_size);
-            compile_expr(rhs, atoms, imports, code, stack_size);
+            compile_expr(lhs, atoms, imports, code, params, stack_size)?;
+            compile_expr(rhs, atoms, imports, code, params, stack_size)?;
 
             assert!(*stack_size >= 2);
 
@@ -87,12 +106,18 @@ fn compile_expr(expr: &Expr, atoms: &mut Atoms, imports: &HashMap<(u32, u32, u32
                     .expect("erlang:'-' should be always present"),
             };
             code.extend(encode_arg(Tag::U, bif2 as i32)); // Bif
-            code.extend(encode_arg(Tag::X, (*stack_size - 2) as i32)); // Arg1
-            code.extend(encode_arg(Tag::X, (*stack_size - 1) as i32)); // Arg2
-            code.extend(encode_arg(Tag::X, (*stack_size - 2) as i32)); // Res
+            code.extend(encode_arg(Tag::X, (stack_start + *stack_size - 2) as i32)); // Arg1
+            code.extend(encode_arg(Tag::X, (stack_start + *stack_size - 1) as i32)); // Arg2
+            code.extend(encode_arg(Tag::X, (stack_start + *stack_size - 2) as i32)); // Res
             *stack_size -= 1;
+            Some(())
         },
     }
+}
+
+struct CompiledFunc {
+    label: u32,
+    arity: u32,
 }
 
 // CodeChunk = <<
@@ -106,12 +131,12 @@ fn compile_expr(expr: &Expr, atoms: &mut Atoms, imports: &HashMap<(u32, u32, u32
 //   Code:(ChunkSize-SubSize)/binary,  % all remaining data
 //   Padding4:0..3/unit:8
 // >>
-fn encode_code_chunk<'a>(module: &'a Module, imports: &HashMap<(u32, u32, u32), u32>, atoms: &mut Atoms, labels: &mut HashMap<u32, u32>) -> Vec<u8> {
+fn encode_code_chunk<'a>(module: &'a Module, imports: &HashMap<(u32, u32, u32), u32>, atoms: &mut Atoms, labels: &mut HashMap<u32, CompiledFunc>) -> Vec<u8> {
     let mut label_count: u32 = 0;
     let mut function_count: u32 = 0;
 
     let mut code = Vec::new();
-    for (_, Func{name, body}) in module.funcs.iter() {
+    for (_, Func{name, params, body}) in module.funcs.iter() {
         function_count += 1;
 
         label_count += 1;
@@ -122,16 +147,24 @@ fn encode_code_chunk<'a>(module: &'a Module, imports: &HashMap<(u32, u32, u32), 
         code.extend(encode_arg(Tag::A, atoms.get_id("bada") as i32));
         let name_id = atoms.get_id(&name.text);
         code.extend(encode_arg(Tag::A, name_id as i32));
-        code.extend(encode_arg(Tag::U, 0));
+        code.extend(encode_arg(Tag::U, params.len() as i32));
 
         label_count += 1;
         code.push(OpCode::Label as u8);
         code.extend(encode_arg(Tag::U, label_count as i32));
-        labels.insert(name_id, label_count);
+        labels.insert(name_id, CompiledFunc {
+            label: label_count,
+            arity: params.len() as u32,
+        });
 
         let mut stack_size = 0;
-        compile_expr(body, atoms, imports, &mut code, &mut stack_size);
+        compile_expr(body, atoms, imports, &mut code, &params, &mut stack_size);
 
+        if params.len() > 0 {
+            code.push(OpCode::Move as u8);
+            code.extend(encode_arg(Tag::X, params.len() as i32));
+            code.extend(encode_arg(Tag::X, 0i32));
+        }
         code.push(OpCode::Return as u8);
     }
     code.push(OpCode::IntCodeEnd as u8);
@@ -217,14 +250,14 @@ fn encode_imports_chunk(atoms: &mut Atoms, imports: &mut HashMap<(u32, u32, u32)
 //     >> || repeat ExportCount ],
 //   Padding4:0..3/unit:8
 // >>
-fn encode_exports_chunk(labels: &HashMap<u32, u32>) -> Vec<u8> {
+fn encode_exports_chunk(labels: &HashMap<u32, CompiledFunc>) -> Vec<u8> {
     let mut chunk = Vec::new();
     let export_count: u32 = labels.len() as u32;
     chunk.extend(export_count.to_be_bytes());
 
-    for (name_id, label) in labels.iter() {
+    for (name_id, CompiledFunc{label, arity}) in labels.iter() {
         chunk.extend(name_id.to_be_bytes());
-        chunk.extend(0u32.to_be_bytes());
+        chunk.extend(arity.to_be_bytes());
         chunk.extend(label.to_be_bytes());
     }
 
@@ -264,7 +297,7 @@ impl Atoms {
 
 pub fn compile_beam_module(module: &Module) -> Vec<u8> {
     let mut atoms = Atoms::default();
-    let mut labels: HashMap<u32, u32> = HashMap::new();
+    let mut labels: HashMap<u32, CompiledFunc> = HashMap::new();
     let mut imports: HashMap<(u32, u32, u32), u32> = HashMap::new();
 
     // TODO: get module name from the stem of the input file

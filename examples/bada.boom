@@ -1,3 +1,7 @@
-hello = 34 + 35;
-world = 500 - 80;
-foo = 1337;
+inc(x int x int) = x + 1;       // Increment by one
+sum(x int y int) = x + y; // Sum up two numbers
+sub(x int y int) = x - y; // Subtract two numbers
+
+hello() = 34 + 35;
+world() = 500 - 80;
+foo() = 1337;
