@@ -85,8 +85,24 @@ impl<'a> Lexer<'a> {
         self.content[self.pos..].starts_with(prefix)
     }
 
+    fn drop_line(&mut self) {
+        while let Some(x) = self.current_char() {
+            self.chop_char();
+            if x == '\n' {
+                break
+            }
+        }
+    }
+
     fn next_token(&mut self) -> Token {
-        self.trim_whitespaces();
+        'trim_whitespaces_and_comments: loop {
+            self.trim_whitespaces();
+            if self.starts_with(&['/', '/']) {
+                self.drop_line();
+            } else {
+                break 'trim_whitespaces_and_comments
+            }
+        }
 
         let loc = Loc {
             file_path: self.file_path.clone(),
