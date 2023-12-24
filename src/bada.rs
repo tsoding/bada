@@ -9,6 +9,8 @@ mod compiler;
 mod lex;
 mod parser;
 
+use parser::Module;
+
 fn main() -> ExitCode {
     let mut args = env::args();
     let program = args.next().expect("program");
@@ -31,7 +33,7 @@ fn main() -> ExitCode {
         }
     };
     let mut lexer = lex::Lexer::new(&content, input_path.clone());
-    let module = if let Some(module) = parser::parse_module(&mut lexer) {
+    let module = if let Some(module) = Module::parse(&mut lexer) {
         module
     } else {
         return ExitCode::FAILURE;
