@@ -48,7 +48,7 @@ impl Expr {
 
 pub struct Func {
     pub name: Token,
-    pub params: Vec<Param>,
+    pub params: HashMap<String, Param>,
     pub body: Expr,
 }
 
@@ -71,7 +71,8 @@ impl Type {
 
 pub struct Param {
     pub name: Token,
-    pub typ: Type
+    pub typ: Type,
+    pub index: usize,
 }
 
 #[derive(Default)]
@@ -98,10 +99,10 @@ impl Module {
 
                     let _ = lexer.expect_tokens(&[TokenKind::OpenParen])?;
 
-                    let mut params: Vec<Param> = Vec::new();
+                    let mut params: HashMap<String, Param> = HashMap::new();
                     'parse_params: loop {
                         let name = lexer.expect_tokens(&[TokenKind::Ident, TokenKind::ClosedParen])?;
-                        if let Some(existing_param) = params.iter().find(|param| param.name.text == name.text) {
+                        if let Some(existing_param) = params.get(&name.text) {
                             report!(&name.loc, "ERROR", "Redefinition of existing parameter {name}", name = name.text);
                             report!(&existing_param.name.loc, "INFO", "The existing parameter is defined here");
                             return None;
@@ -109,7 +110,8 @@ impl Module {
                         match name.kind {
                             TokenKind::Ident => {
                                 let typ = Type::parse(lexer)?;
-                                params.push(Param {name, typ});
+                                let index = params.len();
+                                params.insert(name.text.clone(), Param {name, typ, index});
                             },
                             TokenKind::ClosedParen => break 'parse_params,
                             _ => unreachable!()

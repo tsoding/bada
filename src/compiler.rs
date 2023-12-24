@@ -61,14 +61,14 @@ fn encode_chunk(tag: [u8; 4], chunk: Vec<u8>) -> Vec<u8> {
 }
 
 
-fn compile_expr(expr: &Expr, atoms: &mut Atoms, imports: &HashMap<(u32, u32, u32), u32>, code: &mut Vec<u8>, params: &Vec<Param>, stack_size: &mut usize) -> Option<()> {
+fn compile_expr(expr: &Expr, atoms: &mut Atoms, imports: &HashMap<(u32, u32, u32), u32>, code: &mut Vec<u8>, params: &HashMap<String, Param>, stack_size: &mut usize) -> Option<()> {
     let stack_start = params.len();
     match expr {
         Expr::Var(name) => {
-            match params.iter().enumerate().find(|(_, param)| {param.name.text == name.text}) {
-                Some((i, _)) => {
+            match params.get(&name.text) {
+                Some(param) => {
                     code.push(OpCode::Move as u8);
-                    code.extend(encode_arg(Tag::X, i as i32));
+                    code.extend(encode_arg(Tag::X, param.index as i32));
                     code.extend(encode_arg(Tag::X, (stack_start + *stack_size) as i32));
                     *stack_size += 1;
                     Some(())
