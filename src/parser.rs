@@ -89,6 +89,13 @@ impl Module {
             ])?;
             match name.kind {
                 TokenKind::Ident => {
+                    // TODO: redefinition of the function should be allowed for function with different arity
+                    if let Some(existing_func) = module.funcs.get(&name.text) {
+                        report!(&name.loc, "ERROR", "Redefinition of existing function {name}", name = name.text);
+                        report!(&existing_func.name.loc, "INFO", "The existing function is defined here");
+                        return None;
+                    }
+
                     let _ = lexer.expect_tokens(&[TokenKind::OpenParen])?;
 
                     let mut params: Vec<Param> = Vec::new();
@@ -126,7 +133,6 @@ impl Module {
                         }
                         TokenKind::Plus | TokenKind::Minus => {
                             let rhs = Expr::parse(lexer)?;
-                            // TODO: check for function redefinition
                             module.funcs.insert(name.text.clone(), Func {
                                 name,
                                 params,
