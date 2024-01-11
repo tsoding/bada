@@ -1,6 +1,5 @@
-use diag::*;
 use std::collections::HashMap;
-use parser::{Expr, Module, Func, BinopKind, Binop, Param};
+use crate::parser::{Expr, Module, Func, BinopKind, Binop, Param};
 
 #[repr(u8)]
 enum Tag {
@@ -60,7 +59,7 @@ fn encode_chunk(tag: [u8; 4], chunk: Vec<u8>) -> Vec<u8> {
     result
 }
 
-
+// FIXME: too much parametres
 fn compile_expr(expr: &Expr, atoms: &mut Atoms, imports: &HashMap<(u32, u32, u32), u32>, code: &mut Vec<u8>, params: &HashMap<String, Param>, stack_size: &mut usize) -> Option<()> {
     let stack_start = params.len();
     match expr {
