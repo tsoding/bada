@@ -1,4 +1,8 @@
-use diag::Loc;
+use std::path::Path;
+use std::fmt::Display;
+use std::rc::Rc;
+
+use crate::diag::Loc;
 
 #[derive(Clone, Copy, PartialEq)]
 pub enum TokenKind {
@@ -27,9 +31,9 @@ const FIXED_TOKENS: &[(&[char], TokenKind)] = &[
     (&[')'], TokenKind::ClosedParen),
 ];
 
-impl TokenKind {
-    fn human(&self) -> &str {
-        match self {
+impl Display for TokenKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
             Self::Ident => "identifier",
             Self::Number => "number",
 
@@ -43,7 +47,7 @@ impl TokenKind {
 
             Self::End => "end of input",
             Self::Unknown => "unknown token",
-        }
+        })
     }
 }
 
@@ -53,20 +57,25 @@ pub struct Token {
     pub loc: Loc,
 }
 
-pub struct Lexer<'a> {
-    content: &'a [char],
-    file_path: String,
+// I use Rc<Path> instead of the previous String, because `String::clone` has
+// a big cost, Path is made to represent file path (like str to represent
+// string) and Rc owned only 1 paths and not 10,000
+pub struct Lexer {
+    content: Vec<char>,
+    file_path: Rc<Path>,
     pos: usize,
     bol: usize,
     row: usize,
 }
 
-impl<'a> Lexer<'a> {
-    pub fn new(content: &'a [char], file_path: String) -> Self {
-        Self {content, file_path, pos: 0, bol: 0, row: 0}
+impl Lexer {
+    pub fn new(content: Vec<char>, file_path: Rc<Path>) -> Self {
+        Self { content, file_path, pos: 0, bol: 0, row: 0 }
     }
 
-    pub fn expect_tokens(&mut self, expected_kinds: &[TokenKind]) -> Option<Token> {
+    pub fn expect_tokens<E: AsRef<[TokenKind]>>(&mut self, expected_kinds: E) -> Option<Token> {
+        let expected_kinds = expected_kinds.as_ref();
+
         let token = self.next_token();
         for kind in expected_kinds {
             if token.kind == *kind {
@@ -74,19 +83,16 @@ impl<'a> Lexer<'a> {
             }
         }
 
-        let mut expected_list = String::new();
-        for (i, kind) in expected_kinds.iter().enumerate() {
-            if i == 0 {
-                expected_list.push_str(&format!("{}", kind.human()))
-            } else if i + 1 >= expected_kinds.len() {
-                expected_list.push_str(&format!(", or {}", kind.human()))
-            } else {
-                expected_list.push_str(&format!(", {}", kind.human()))
-            }
-        }
+        let expected_list = expected_kinds.iter().enumerate()
+            .fold(String::new(), |acc, (i, kind)| {
+                match i {
+                    0 => format!("{kind}"),
+                    x if x < expected_kinds.len() - 1 => format!("{acc}, {kind}"),
+                    _ => format!("{acc}, or {kind}")
+                }
+            });
 
-        report!(token.loc, "ERROR", "Expected {expected_list}, but got {actual}",
-                actual = token.kind.human());
+        report!(token.loc, "ERROR", "Expected {expected_list}, but got {}", token.kind);
         None
     }
 
@@ -104,6 +110,7 @@ impl<'a> Lexer<'a> {
     }
 
     fn next_token(&mut self) -> Token {
+        // TODO: move into it's owned function
         'trim_whitespaces_and_comments: loop {
             self.trim_whitespaces();
             if self.starts_with(&['/', '/']) {
@@ -114,72 +121,56 @@ impl<'a> Lexer<'a> {
         }
 
         let loc = Loc {
-            file_path: self.file_path.clone(),
+            file_path: Rc::clone(&self.file_path),
             row: self.row + 1,
             col: self.pos - self.bol + 1,
         };
 
-        let x = if let Some(x) = self.current_char() {
-            x
-        } else {
-            return Token {
-                text: "".to_string(),
-                loc,
-                kind: TokenKind::End,
+        let (text, kind) = match self.current_char() {
+            Some(x) if x.is_alphabetic() => (self.lex_ident(), TokenKind::Ident),
+            Some(x) if x.is_numeric() => (self.lex_number(), TokenKind::Number),
+            Some(x) => 'fixed_tokens: {
+                for &(prefix, kind) in FIXED_TOKENS.iter() {
+                    if self.starts_with(prefix) {
+                        self.chop_chars(prefix.len());
+                        break 'fixed_tokens (prefix.iter().collect(), kind);
+                    }
+                }
+        
+                self.chop_char();
+
+                (x.to_string(), TokenKind::Unknown)
             }
+            None => (String::new(), TokenKind::End)
         };
 
-        if x.is_alphabetic() {
-            let mut text = String::new();
-            while let Some(x) = self.current_char() {
-                if x.is_alphanumeric() {
-                    self.chop_char();
-                    text.push(x);
-                } else {
-                    break;
-                }
-            }
-            return Token {
-                text,
-                loc,
-                kind: TokenKind::Ident,
-            }
-        }
+        Token { text, loc, kind }
+    }
 
-        if x.is_numeric() {
-            let mut text = String::new();
-            while let Some(x) = self.current_char() {
-                if x.is_numeric() {
-                    self.chop_char();
-                    text.push(x);
-                } else {
-                    break;
-                }
-            }
-            return Token {
-                text,
-                loc,
-                kind: TokenKind::Number,
+    fn lex_ident(&mut self) -> String {
+        let mut text = String::new();
+        while let Some(x) = self.current_char() {
+            if x.is_alphanumeric() {
+                self.chop_char();
+                text.push(x);
+            } else {
+                break;
             }
         }
+        text
+    }
 
-        for &(prefix, kind) in FIXED_TOKENS.iter() {
-            if self.starts_with(prefix) {
-                self.chop_chars(prefix.len());
-                return Token {
-                    text: prefix.iter().collect(),
-                    loc,
-                    kind,
-                }
+    fn lex_number(&mut self) -> String {
+        let mut text = String::new();
+        while let Some(x) = self.current_char() {
+            if x.is_numeric() {
+                self.chop_char();
+                text.push(x);
+            } else {
+                break;
             }
         }
-
-        self.chop_char();
-        Token {
-            text: x.to_string(),
-            loc,
-            kind: TokenKind::Unknown,
-        }
+        text
     }
 
     fn trim_whitespaces(&mut self) {
@@ -193,9 +184,10 @@ impl<'a> Lexer<'a> {
     }
 
     fn chop_char(&mut self) {
-        if let Some(x) = self.current_char() {
+        // to avoid unnecessary clone
+        if let Some(x) = self.content.get(self.pos) {
             self.pos += 1;
-            if x == '\n' {
+            if *x == '\n' {
                 self.row += 1;
                 self.bol = self.pos;
             }

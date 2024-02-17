@@ -1,5 +1,4 @@
-use diag::*;
-use lex::{Token, TokenKind, Lexer};
+use crate::lex::{Token, TokenKind, Lexer};
 use std::collections::HashMap;
 
 pub enum BinopKind {
@@ -29,7 +28,7 @@ pub enum Expr {
 
 impl Expr {
     fn parse(lexer: &mut Lexer) -> Option<Self> {
-        let token = lexer.expect_tokens(&[TokenKind::Number, TokenKind::Ident])?;
+        let token = lexer.expect_tokens([TokenKind::Number, TokenKind::Ident])?;
         match token.kind {
             TokenKind::Ident => Some(Expr::Var(token)),
             TokenKind::Number => {
@@ -58,7 +57,7 @@ pub enum Type {
 
 impl Type {
     fn parse(lexer: &mut Lexer) -> Option<Self> {
-        let ident = lexer.expect_tokens(&[TokenKind::Ident])?;
+        let ident = lexer.expect_tokens([TokenKind::Ident])?;
         match ident.text.as_str() {
             "int" => Some(Type::Int),
             unknown => {
@@ -82,12 +81,16 @@ pub struct Module {
 
 impl Module {
     pub fn parse(lexer: &mut Lexer) -> Option<Module> {
+        // module should not be defined in this way but in main (and therefore be
+        // self) and the result of the function should be a Result<(), Error>.
         let mut module = Module::default();
+
         loop {
-            let name = lexer.expect_tokens(&[
+            let name = lexer.expect_tokens([
                 TokenKind::Ident,
                 TokenKind::End
             ])?;
+
             match name.kind {
                 TokenKind::Ident => {
                     // TODO: redefinition of the function should be allowed for function with different arity
@@ -97,18 +100,20 @@ impl Module {
                         return None;
                     }
 
-                    let _ = lexer.expect_tokens(&[TokenKind::OpenParen])?;
+                    lexer.expect_tokens([TokenKind::OpenParen])?;
 
                     let mut params: HashMap<String, Param> = HashMap::new();
                     'parse_params: loop {
-                        let name = lexer.expect_tokens(&[TokenKind::Ident, TokenKind::ClosedParen])?;
-                        if let Some(existing_param) = params.get(&name.text) {
-                            report!(&name.loc, "ERROR", "Redefinition of existing parameter {name}", name = name.text);
-                            report!(&existing_param.name.loc, "INFO", "The existing parameter is defined here");
-                            return None;
-                        }
+                        let name = lexer.expect_tokens([TokenKind::Ident, TokenKind::ClosedParen])?;
                         match name.kind {
                             TokenKind::Ident => {
+                                // to test only if it's an ident
+                                if let Some(existing_param) = params.get(&name.text) {
+                                    report!(&name.loc, "ERROR", "Redefinition of existing parameter {name}", name = name.text);
+                                    report!(&existing_param.name.loc, "INFO", "The existing parameter is defined here");
+                                    return None;
+                                }
+
                                 let typ = Type::parse(lexer)?;
                                 let index = params.len();
                                 params.insert(name.text.clone(), Param {name, typ, index});
@@ -118,9 +123,11 @@ impl Module {
                         }
                     }
 
-                    let _ = lexer.expect_tokens(&[TokenKind::Equals])?;
+                    lexer.expect_tokens([TokenKind::Equals])?;
+
+                    // the operations are expressions "a + 2" is an expression, not just "a" and "2"
                     let lhs = Expr::parse(lexer)?;
-                    let token = lexer.expect_tokens(&[
+                    let token = lexer.expect_tokens([
                         TokenKind::SemiColon,
                         TokenKind::Plus,
                         TokenKind::Minus,
@@ -144,7 +151,7 @@ impl Module {
                                     rhs: Box::new(rhs),
                                 })
                             });
-                            lexer.expect_tokens(&[TokenKind::SemiColon])?;
+                            lexer.expect_tokens([TokenKind::SemiColon])?;
                         }
                         _ => unreachable!(),
                     }
