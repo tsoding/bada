@@ -42,7 +42,7 @@ fn main() -> ExitCode {
 
     let beam = compiler::compile_beam_module(&module);
     let mut bytes: Vec<u8> = Vec::new();
-    bytes.extend("FOR1".as_bytes());
+    bytes.extend(b"FOR1");
     bytes.extend((beam.len() as u32).to_be_bytes());
     bytes.extend(beam);
 

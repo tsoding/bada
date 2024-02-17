@@ -126,68 +126,51 @@ impl Lexer {
             col: self.pos - self.bol + 1,
         };
 
-        match self.current_char() {
-            // TODO: move into it's owned function
-            Some(x) if x.is_alphabetic() => {
-                let mut text = String::new();
-                while let Some(x) = self.current_char() {
-                    if x.is_alphanumeric() {
-                        self.chop_char();
-                        text.push(x);
-                    } else {
-                        break;
-                    }
-                }
-                
-                Token {
-                    text,
-                    loc,
-                    kind: TokenKind::Ident,
-                }
-            },
-            // TODO: move into it's owned function
-            Some(x) if x.is_numeric() => {
-                let mut text = String::new();
-                while let Some(x) = self.current_char() {
-                    if x.is_numeric() {
-                        self.chop_char();
-                        text.push(x);
-                    } else {
-                        break;
-                    }
-                }
-                
-                Token {
-                    text,
-                    loc,
-                    kind: TokenKind::Number,
-                }
-            },
+        let (text, kind) = match self.current_char() {
+            Some(x) if x.is_alphabetic() => (self.lex_ident(), TokenKind::Ident),
+            Some(x) if x.is_numeric() => (self.lex_number(), TokenKind::Number),
             Some(x) => 'fixed_tokens: {
                 for &(prefix, kind) in FIXED_TOKENS.iter() {
                     if self.starts_with(prefix) {
                         self.chop_chars(prefix.len());
-                        break 'fixed_tokens Token {
-                            text: prefix.iter().collect(),
-                            loc,
-                            kind,
-                        }
+                        break 'fixed_tokens (prefix.iter().collect(), kind);
                     }
                 }
-
+        
                 self.chop_char();
-                Token {
-                    text: x.to_string(),
-                    loc,
-                    kind: TokenKind::Unknown,
-                }
+
+                (x.to_string(), TokenKind::Unknown)
             }
-            None => Token {
-                text: "".to_string(),
-                loc,
-                kind: TokenKind::End,
+            None => (String::new(), TokenKind::End)
+        };
+
+        Token { text, loc, kind }
+    }
+
+    fn lex_ident(&mut self) -> String {
+        let mut text = String::new();
+        while let Some(x) = self.current_char() {
+            if x.is_alphanumeric() {
+                self.chop_char();
+                text.push(x);
+            } else {
+                break;
             }
         }
+        text
+    }
+
+    fn lex_number(&mut self) -> String {
+        let mut text = String::new();
+        while let Some(x) = self.current_char() {
+            if x.is_numeric() {
+                self.chop_char();
+                text.push(x);
+            } else {
+                break;
+            }
+        }
+        text
     }
 
     fn trim_whitespaces(&mut self) {
